@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Phân Tích Dữ Liệu</title>
+    <title>Bảng tổng hợp thu chi</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter -->
@@ -23,7 +23,7 @@
 <body class="bg-gray-100 p-6">
 
     <div class="max-w-7xl mx-auto bg-white p-8 rounded-2xl shadow-xl">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Dashboard Phân Tích Dữ Liệu</h1>
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Bảng tổng hợp thu chi</h1>
 
         <!-- Bộ lọc ngày và nút tải lại -->
         <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4 mb-8 p-4 rounded-xl bg-gray-50">
@@ -116,6 +116,28 @@
             </div>
         </div>
         
+        <!-- Bảng chi tiết giao dịch -->
+        <div class="mt-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Danh sách giao dịch trong kỳ</h2>
+            <div class="bg-gray-50 p-6 rounded-2xl shadow-lg overflow-x-auto">
+                <table class="w-full text-left whitespace-nowrap">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="px-4 py-2 font-medium text-gray-600 rounded-tl-xl">Ngày</th>
+                            <th class="px-4 py-2 font-medium text-gray-600">Loại</th>
+                            <th class="px-4 py-2 font-medium text-gray-600">Diễn giải</th>
+                            <th class="px-4 py-2 font-medium text-gray-600">Số tiền</th>
+                            <th class="px-4 py-2 font-medium text-gray-600">Hình thức</th>
+                            <th class="px-4 py-2 font-medium text-gray-600 rounded-tr-xl">Người tạo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transaction-list-table" class="divide-y divide-gray-200">
+                        <!-- Dữ liệu giao dịch chi tiết sẽ được chèn vào đây -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -213,68 +235,45 @@
             const endDate = new Date(endDateInput.value);
             endDate.setHours(23, 59, 59, 999); // Đặt đến cuối ngày
             
-            // Lọc giao dịch trong kỳ
             const phieuRows = rawData.phieuthu.slice(1);
             const headerPhieu = rawData.phieuthu[0];
             const dateIndex = headerPhieu.indexOf("Ngày");
-            
-            filteredTransactions = phieuRows.filter(row => {
-                const transactionDate = new Date(row[dateIndex]);
-                return transactionDate >= startDate && transactionDate <= endDate;
-            });
-
-            // Tính toán số dư ban đầu cho từng quỹ
-            const initialBalances = {};
-            const allFunds = new Set(Object.values(mappingQuy));
-            allFunds.forEach(fundName => {
-                initialBalances[fundName] = 0;
-            });
-
-            const incomeExpenseBeforePeriod = phieuRows.filter(row => {
-                const transactionDate = new Date(row[dateIndex]);
-                return transactionDate < startDate;
-            });
-
             const incomeIndex = headerPhieu.indexOf("Số tiền thu");
             const expenseIndex = headerPhieu.indexOf("Số tiền chi");
             const incomeFundIndex = headerPhieu.indexOf("Quỹ đến");
             const expenseFundIndex = headerPhieu.indexOf("Quỹ đi");
 
-            // Tính số dư ban đầu
-            incomeExpenseBeforePeriod.forEach(row => {
+            // Khởi tạo các đối tượng để lưu trữ dữ liệu
+            const initialBalances = {};
+            const periodIncome = {};
+            const periodExpense = {};
+            const allFunds = new Set(Object.values(mappingQuy));
+            allFunds.forEach(fundName => {
+                initialBalances[fundName] = 0;
+                periodIncome[fundName] = 0;
+                periodExpense[fundName] = 0;
+            });
+
+            // Lặp qua tất cả các giao dịch để tính toán số dư đầu kỳ và thu chi trong kỳ
+            filteredTransactions = [];
+            phieuRows.forEach(row => {
+                const transactionDate = new Date(row[dateIndex]);
                 const income = parseFloat(row[incomeIndex]) || 0;
                 const expense = parseFloat(row[expenseIndex]) || 0;
                 const incomeFund = mappingQuy[row[incomeFundIndex]];
                 const expenseFund = mappingQuy[row[expenseFundIndex]];
                 
-                if (incomeFund && initialBalances.hasOwnProperty(incomeFund)) {
-                    initialBalances[incomeFund] += income;
-                }
-                if (expenseFund && initialBalances.hasOwnProperty(expenseFund)) {
-                    initialBalances[expenseFund] -= expense;
-                }
-            });
-
-            // Tính toán thu chi trong kỳ
-            const periodIncome = {};
-            const periodExpense = {};
-
-            allFunds.forEach(fundName => {
-                periodIncome[fundName] = 0;
-                periodExpense[fundName] = 0;
-            });
-
-            filteredTransactions.forEach(row => {
-                const income = parseFloat(row[incomeIndex]) || 0;
-                const expense = parseFloat(row[expenseIndex]) || 0;
-                const incomeFund = mappingQuy[row[incomeFundIndex]];
-                const expenseFund = mappingQuy[row[expenseFundIndex]];
-
-                if (incomeFund && periodIncome.hasOwnProperty(incomeFund)) {
-                    periodIncome[incomeFund] += income;
-                }
-                if (expenseFund && periodExpense.hasOwnProperty(expenseFund)) {
-                    periodExpense[expenseFund] += expense;
+                if (transactionDate < startDate) {
+                    // Tính số dư ban đầu cho từng quỹ dựa trên các giao dịch trước thời gian lọc
+                    if (incomeFund) initialBalances[incomeFund] += income;
+                    if (expenseFund) initialBalances[expenseFund] -= expense;
+                } else if (transactionDate >= startDate && transactionDate <= endDate) {
+                    // Thu thập các giao dịch trong kỳ để hiển thị và tính toán
+                    filteredTransactions.push(row);
+                    
+                    // Tính tổng thu và chi trong kỳ
+                    if (incomeFund) periodIncome[incomeFund] += income;
+                    if (expenseFund) periodExpense[expenseFund] += expense;
                 }
             });
 
@@ -332,6 +331,46 @@
             renderIncomeByCategoryChart(chartData.incomeByCat);
             renderExpenseByCategoryChart(chartData.expenseByCat);
             renderFundEndBalanceChart(fundSummary);
+
+            // Cập nhật bảng danh sách giao dịch chi tiết
+            renderTransactionList(filteredTransactions, headerPhieu);
+        }
+
+        // Hàm render bảng chi tiết giao dịch
+        function renderTransactionList(transactions, header) {
+            const tableBody = document.getElementById('transaction-list-table');
+            tableBody.innerHTML = '';
+
+            const dateIndex = header.indexOf("Ngày");
+            const incomeIndex = header.indexOf("Số tiền thu");
+            const expenseIndex = header.indexOf("Số tiền chi");
+            const incomeContentIndex = header.indexOf("Nội dung thu");
+            const expenseContentIndex = header.indexOf("Nội dung chi");
+            const incomeFundIndex = header.indexOf("Quỹ đến");
+            const expenseFundIndex = header.indexOf("Quỹ đi");
+
+            transactions.forEach(row => {
+                const date = row[dateIndex];
+                const income = parseFloat(row[incomeIndex]) || 0;
+                const expense = parseFloat(row[expenseIndex]) || 0;
+                const type = income > 0 ? 'Thu' : 'Chi';
+                const description = income > 0 ? row[incomeContentIndex] : row[expenseContentIndex];
+                const amount = income > 0 ? income : expense;
+                const fund = income > 0 ? mappingQuy[row[incomeFundIndex]] : mappingQuy[row[expenseFundIndex]];
+                const creator = 'N/A'; // Dữ liệu không có trong sheet
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-100 transition-colors duration-150';
+                tr.innerHTML = `
+                    <td class="px-4 py-2">${date}</td>
+                    <td class="px-4 py-2">${type}</td>
+                    <td class="px-4 py-2">${description}</td>
+                    <td class="px-4 py-2">${formatter.format(amount)}</td>
+                    <td class="px-4 py-2">${fund || ''}</td>
+                    <td class="px-4 py-2">${creator}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
         }
 
         // Hàm trích xuất dữ liệu cho biểu đồ
