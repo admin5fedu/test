@@ -2,16 +2,17 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Hiển thị nhiều Sheet</title>
+  <title>Hiển thị nhiều Sheet có phân trang</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     .tabs { margin-bottom: 20px; }
-    button { margin-right: 10px; padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; }
+    button { margin-right: 10px; padding: 6px 14px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; }
     button:hover { background: #e6e6e6; }
     button.active { background: #007BFF; color: white; }
     table { border-collapse: collapse; width: 100%; margin-top: 10px; }
     th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
     th { background-color: #f2f2f2; }
+    .pagination { margin-top: 15px; }
   </style>
 </head>
 <body>
@@ -23,21 +24,21 @@
   </div>
 
   <div id="table-container"></div>
+  <div class="pagination" id="pagination"></div>
 
   <script>
-    // Link CSV các sheet
     const urls = {
       phieuthu: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWBBNDVSZoVKzZSGTcb8XUFk0tDWY8uJWATaxUDKUAm8GZfn4bkXV9N1xFTEkQFV966deIEfIqnGtc/pub?gid=0&single=true&output=csv",
       quytien: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWBBNDVSZoVKzZSGTcb8XUFk0tDWY8uJWATaxUDKUAm8GZfn4bkXV9N1xFTEkQFV966deIEfIqnGtc/pub?gid=884443899&single=true&output=csv"
     };
 
-    let cache = {};       // Cache bảng HTML
-    let rawData = {};     // Cache dữ liệu thô (mảng)
-    let mappingQuy = {};  // Bản đồ ID → Tên quỹ
+    let rawData = {};
+    let mappingQuy = {};
+    let currentSheet = "phieuthu";
+    let currentPage = 1;
+    const rowsPerPage = 20;
 
-    // Tải trước toàn bộ sheet
     async function preloadSheets() {
-      cache = {};
       rawData = {};
       mappingQuy = {};
 
@@ -47,79 +48,117 @@
         rawData[key] = csvToArray(text);
       }
 
-      // Tạo mapping ID → Tên quỹ từ sheet "Quỹ tiền"
+      // mapping quỹ
       const quytienRows = rawData["quytien"];
       const headerQuy = quytienRows[0];
       const idIndex = headerQuy.indexOf("ID");
       const nameIndex = headerQuy.indexOf("Tên quỹ");
       if (idIndex !== -1 && nameIndex !== -1) {
         for (let i = 1; i < quytienRows.length; i++) {
-          const row = quytienRows[i];
-          mappingQuy[row[idIndex]] = row[nameIndex];
+          mappingQuy[quytienRows[i][idIndex]] = quytienRows[i][nameIndex];
         }
       }
 
-      // Xử lý bảng Phiếu thu chi: thay ID bằng tên quỹ
+      // xử lý phiếu thu chi
       const phieuRows = rawData["phieuthu"];
       const headerPhieu = phieuRows[0];
       const quyDenIndex = headerPhieu.indexOf("Quỹ đến");
       const quyDiIndex = headerPhieu.indexOf("Quỹ đi");
 
-      if (quyDenIndex !== -1 || quyDiIndex !== -1) {
-        for (let i = 1; i < phieuRows.length; i++) {
-          if (quyDenIndex !== -1) {
-            const id = phieuRows[i][quyDenIndex];
-            if (mappingQuy[id]) phieuRows[i][quyDenIndex] = mappingQuy[id];
-          }
-          if (quyDiIndex !== -1) {
-            const id = phieuRows[i][quyDiIndex];
-            if (mappingQuy[id]) phieuRows[i][quyDiIndex] = mappingQuy[id];
-          }
+      for (let i = 1; i < phieuRows.length; i++) {
+        if (quyDenIndex !== -1) {
+          const id = phieuRows[i][quyDenIndex];
+          if (mappingQuy[id]) phieuRows[i][quyDenIndex] = mappingQuy[id];
+        }
+        if (quyDiIndex !== -1) {
+          const id = phieuRows[i][quyDiIndex];
+          if (mappingQuy[id]) phieuRows[i][quyDiIndex] = mappingQuy[id];
         }
       }
-
-      // Tạo bảng HTML từ dữ liệu đã xử lý
-      cache["phieuthu"] = arrayToTable(phieuRows);
-      cache["quytien"] = arrayToTable(quytienRows);
 
       showSheet("phieuthu");
     }
 
-    // Reload dữ liệu
     function reloadData() {
       document.getElementById("table-container").innerHTML = "⏳ Đang tải lại dữ liệu...";
+      document.getElementById("pagination").innerHTML = "";
       preloadSheets();
     }
 
-    // Chuyển tab sheet
     function showSheet(name) {
+      currentSheet = name;
+      currentPage = 1;
       document.querySelectorAll(".tabs button").forEach(btn => btn.classList.remove("active"));
       const activeBtn = document.getElementById("btn-" + name);
       if (activeBtn) activeBtn.classList.add("active");
+      renderPage();
+    }
 
+    function renderPage() {
       const container = document.getElementById("table-container");
+      const pagination = document.getElementById("pagination");
       container.innerHTML = "";
-      container.appendChild(cache[name]);
-    }
+      pagination.innerHTML = "";
 
-    // CSV → Array
-    function csvToArray(csvText) {
-      return csvText.trim().split("\n").map(r => r.split(","));
-    }
+      const rows = rawData[currentSheet];
+      if (!rows) return;
 
-    // Array → Bảng HTML
-    function arrayToTable(rows) {
+      const header = rows[0];
+      let dataRows = rows.slice(1);
+
+      // đảo ngược: mới nhất lên trước
+      dataRows = dataRows.reverse();
+
+      // phân trang
+      const totalPages = Math.ceil(dataRows.length / rowsPerPage);
+      const start = (currentPage - 1) * rowsPerPage;
+      const end = start + rowsPerPage;
+      const pageRows = dataRows.slice(start, end);
+
       const table = document.createElement("table");
-      rows.forEach((row, i) => {
+
+      // thêm header
+      const trHead = document.createElement("tr");
+      header.forEach(h => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        trHead.appendChild(th);
+      });
+      table.appendChild(trHead);
+
+      // thêm dữ liệu
+      pageRows.forEach(row => {
         const tr = document.createElement("tr");
         row.forEach(cell => {
-          const td = document.createElement(i === 0 ? "th" : "td");
+          const td = document.createElement("td");
           td.textContent = cell;
           tr.appendChild(td);
         });
         table.appendChild(tr);
       });
-      return table;
+
+      container.appendChild(table);
+
+      // phân trang controls
+      if (totalPages > 1) {
+        const prevBtn = document.createElement("button");
+        prevBtn.textContent = "⬅ Trang trước";
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.onclick = () => { currentPage--; renderPage(); };
+
+        const nextBtn = document.createElement("button");
+        nextBtn.textContent = "Trang sau ➡";
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.onclick = () => { currentPage++; renderPage(); };
+
+        pagination.appendChild(prevBtn);
+        pagination.appendChild(document.createTextNode(` Trang ${currentPage}/${totalPages} `));
+        pagination.appendChild(nextBtn);
+      }
+    }
+
+    function csvToArray(csvText) {
+      return csvText.trim().split("\n").map(r => r.split(","));
     }
 
     preloadSheets();
