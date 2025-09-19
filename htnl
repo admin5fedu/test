@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Bảng Google Sheet từ CSV</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h2>Dữ liệu từ Google Sheet</h2>
+  <table id="sheetTable"></table>
+
+  <script>
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWBBNDVSZoVKzZSGTcb8XUFk0tDWY8uJWATaxUDKUAm8GZfn4bkXV9N1xFTEkQFV966deIEfIqnGtc/pub?output=csv";
+
+    fetch(csvUrl)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("HTTP error " + response.status);
+        }
+        return response.text();
+      })
+      .then(csvText => {
+        const rows = csvText.trim().split("\n").map(r => r.split(","));
+        const table = document.getElementById("sheetTable");
+        
+        // Tạo header
+        const headerRow = rows[0];
+        let tr = document.createElement("tr");
+        headerRow.forEach(header => {
+          let th = document.createElement("th");
+          th.textContent = header;
+          tr.appendChild(th);
+        });
+        table.appendChild(tr);
+
+        // Các dòng dữ liệu
+        for (let i = 1; i < rows.length; i++) {
+          let row = rows[i];
+          let tr2 = document.createElement("tr");
+          row.forEach(cell => {
+            let td = document.createElement("td");
+            td.textContent = cell;
+            tr2.appendChild(td);
+          });
+          table.appendChild(tr2);
+        }
+      })
+      .catch(err => {
+        const table = document.getElementById("sheetTable");
+        table.innerHTML = "<tr><td>Lỗi load dữ liệu: " + err.message + "</td></tr>";
+      });
+  </script>
+</body>
+</html>
