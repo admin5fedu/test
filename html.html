@@ -2,58 +2,124 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Bảng Google Sheet từ CSV</title>
+  <title>Google Sheets Tabs</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    .tabs { margin-bottom: 20px; }
+    .tab-btn {
+      padding: 8px 16px;
+      margin-right: 5px;
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      cursor: pointer;
+      border-radius: 4px 4px 0 0;
+    }
+    .tab-btn.active {
+      background: #fff;
+      border-bottom: 1px solid #fff;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+      border: 1px solid #ccc;
+      border-top: none;
+      padding: 10px;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 6px; }
     th { background: #eee; }
   </style>
 </head>
 <body>
-  <h2>Dữ liệu từ Google Sheet</h2>
-  <table id="sheetTable"></table>
+  <h1>Dữ liệu từ Google Sheets</h1>
+
+  <!-- Thanh tab -->
+  <div class="tabs" id="tabs"></div>
+
+  <!-- Nội dung bảng -->
+  <div id="sheetsContainer"></div>
 
   <script>
-    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWBBNDVSZoVKzZSGTcb8XUFk0tDWY8uJWATaxUDKUAm8GZfn4bkXV9N1xFTEkQFV966deIEfIqnGtc/pub?output=csv";
+    // Danh sách sheet: tên + link CSV
+    const sheets = [
+      { 
+        name: "Phiếu thu chi", 
+        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWBBNDVSZoVKzZSGTcb8XUFk0tDWY8uJWATaxUDKUAm8GZfn4bkXV9N1xFTEkQFV966deIEfIqnGtc/pub?gid=0&single=true&output=csv" 
+      },
+      { 
+        name: "Quỹ tiền", 
+        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWBBNDVSZoVKzZSGTcb8XUFk0tDWY8uJWATaxUDKUAm8GZfn4bkXV9N1xFTEkQFV966deIEfIqnGtc/pub?gid=884443899&single=true&output=csv" 
+      }
+    ];
 
-    fetch(csvUrl)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error("HTTP error " + response.status);
-        }
-        return response.text();
-      })
-      .then(csvText => {
-        const rows = csvText.trim().split("\n").map(r => r.split(","));
-        const table = document.getElementById("sheetTable");
-        
-        // Tạo header
-        const headerRow = rows[0];
+    const tabs = document.getElementById("tabs");
+    const container = document.getElementById("sheetsContainer");
+
+    function renderCSV(id, name, csvText) {
+      const rows = csvText.trim().split("\n").map(r => r.split(","));
+
+      // Tạo container cho bảng này
+      let div = document.createElement("div");
+      div.className = "tab-content";
+      div.id = id;
+
+      // Tạo bảng
+      let table = document.createElement("table");
+
+      rows.forEach((row, i) => {
         let tr = document.createElement("tr");
-        headerRow.forEach(header => {
-          let th = document.createElement("th");
-          th.textContent = header;
-          tr.appendChild(th);
+        row.forEach(cell => {
+          let td = document.createElement(i === 0 ? "th" : "td");
+          td.textContent = cell;
+          tr.appendChild(td);
         });
         table.appendChild(tr);
-
-        // Các dòng dữ liệu
-        for (let i = 1; i < rows.length; i++) {
-          let row = rows[i];
-          let tr2 = document.createElement("tr");
-          row.forEach(cell => {
-            let td = document.createElement("td");
-            td.textContent = cell;
-            tr2.appendChild(td);
-          });
-          table.appendChild(tr2);
-        }
-      })
-      .catch(err => {
-        const table = document.getElementById("sheetTable");
-        table.innerHTML = "<tr><td>Lỗi load dữ liệu: " + err.message + "</td></tr>";
       });
+
+      div.appendChild(table);
+      container.appendChild(div);
+    }
+
+    // Tạo tab button
+    sheets.forEach((sheet, index) => {
+      let btn = document.createElement("button");
+      btn.className = "tab-btn";
+      btn.textContent = sheet.name;
+      btn.onclick = () => showTab("tab" + index, btn);
+
+      tabs.appendChild(btn);
+
+      fetch(sheet.url)
+        .then(res => res.text())
+        .then(csv => renderCSV("tab" + index, sheet.name, csv))
+        .catch(err => {
+          let div = document.createElement("div");
+          div.className = "tab-content";
+          div.id = "tab" + index;
+          div.textContent = `Lỗi tải ${sheet.name}: ${err}`;
+          container.appendChild(div);
+        });
+    });
+
+    // Hàm hiển thị tab
+    function showTab(tabId, btn) {
+      // Ẩn hết
+      document.querySelectorAll(".tab-content").forEach(div => div.classList.remove("active"));
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+
+      // Hiện tab được chọn
+      document.getElementById(tabId).classList.add("active");
+      btn.classList.add("active");
+    }
+
+    // Hiển thị tab đầu tiên mặc định
+    window.onload = () => {
+      const firstBtn = document.querySelector(".tab-btn");
+      if (firstBtn) firstBtn.click();
+    };
   </script>
 </body>
 </html>
