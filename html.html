@@ -106,6 +106,9 @@
       const header = rows[0];
       let dataRows = rows.slice(1);
 
+      // chỉ lấy dòng có ID (cột A khác rỗng)
+      dataRows = dataRows.filter(r => r[0] && r[0].trim() !== "");
+
       // đảo ngược: mới nhất lên trước
       dataRows = dataRows.reverse();
 
